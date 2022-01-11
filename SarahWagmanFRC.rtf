@@ -1,0 +1,228 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2636
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\margl1440\margr1440\vieww21580\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 import numpy as np\
+import pandas as pd\
+from itertools import permutations\
+import math\
+\
+#importing the adjacency matrix in as a pandas dataframe called "adj"\
+adj = pd.read_csv("newPAM.csv", header = None)\
+\
+#Throughout the code, node1 and node2 will always refer to the two nodes that comprise the original edge whose Forman-Ricci Curvature(FRC) is being calculated\
+\
+#function to find the weight of an edge\
+#it locates the weight of two nodes in the adjacency matrix\
+def edgeweight(node1, node2):\
+    return adj.iloc[node1][node2]\
+\
+#function to find the weight of a vertex\
+#It takes all of the other nodes in the graph and adds up its edge weight with the original vertex. \
+#This sum is stored in totalWeight.\
+#The loop also records the number of edge weights greater than 0 (stored in numOfEdges)\
+def vertexweight(node):\
+    totalWeight = 0\
+    numOfEdges = 0\
+    for x in range (0, len(adj)):\
+        totalWeight = totalWeight + adj.iloc[node][x]\
+        if adj.iloc[node][x] > 0:\
+            numOfEdges = numOfEdges + 1\
+    return totalWeight/numOfEdges\
+\
+#These functions that calculate the weight of three or four node cycles will be used later in the faceweight function\
+def triarea(node1, node2, x):\
+    totalArea = (edgeweight(node2, node1) + edgeweight(x, node1) + edgeweight(x, node2))/3\
+    return totalArea\
+\
+def quadarea(node1,node2, x, y):\
+    totalArea = (edgeweight(x, y) + edgeweight(node1,node2) + edgeweight(x, node1) + edgeweight(y,node2))/4\
+    return totalArea\
+\
+#this function will find the face weights of all of the shapes containing the original edge\
+#it will return a dictionary with all of the nodes that comprise a cycle as the key and weight of that cycle as the value\
+#When they are part of a key in a dictionary, the nodes are stored in a tuple because syntactiacally they cannot be in a list\
+def faceweight (node1, node2):\
+#List that holds all of the nodes that form an edge with node 1\
+    exed1 = []\
+#List that holds all of the nodes that form an edge with node 2\
+    exed2 = []\
+#The dictionary that will store the weights and nodes of the cycles and will be returned by the function\
+    areas = \{\}      \
+\
+#This loop takes each node and sees if it forms edges with both of the original nodes\
+#If it does, this node and the two original nodes form a triangle and their area is taken using the triarea function above\
+#The nodes forming the triangle (represented in the variable "cycle")are added as a key in the dictionary "areas" and the weight of this triangle is added as the value \
+#Throughout this code, the variable x will represent the third node in a cycle (unless I specify otherwise)\
+    for x in range(0,len(adj)):\
+#In the function, "if __ != ___," statements account for possible duplicates when comparing specific nodes, such as node1 and node2, against all of the nodes in the set\
+        if x != node1 and x!= node2:\
+            if edgeweight(node1,x) > 0 and edgeweight(node2,x) > 0:\
+                cycle = [node1, node2, x]\
+                areas[tuple(cycle)] = triarea(node1, node2, x)\
+#This loop also finds the nodes that form an edge with either node1 or node2 and stores them in the exed1 and exed2 lists respectively\
+#These lists will be used later to help calculate bigger shapes\
+            if adj.iloc[node1][x] > 0:\
+                exed1.append(x)\
+            if adj.iloc[node2][x] > 0:\
+                exed2.append(x)\
+\
+#This second loop will deal with quadrilaterals\
+#It individually matches every node that is connected with node1 (from the exed1 list) with every node connected with node2 (from the exed2 list) using two "for" loops\
+#I call the node attached to the additional node from exed1 "x" and the additional node from exed2 "y"\
+    for x in exed1:\
+                for y in exed2:\
+                    if x != node1 and x != node2 and y != node1 and y != node2 and x != y:\
+                        #Since one already knows that edge node1,x and node2,y exist (because they were created from the exed lists),\
+                        #we just need to test if there is an edge between x and y in order to determine if a quadrilateral has formed between node1,node2,x, and y\
+                        if edgeweight(x,y) > 0:\
+                            #After the existance of a quadrilateral is confirmed, an if statement accounts for the special circumstances where there is a triangle formed either between x and node2 or y and node1\
+                            #In those cases, the triarea function is used to calculate the area of the two triangles that make up the quadrilateral\
+                            #The total weight of the quadrilateral is stored in the variable "totalquad"\
+                            if edgeweight(x, node2) >0:\
+                                part1 = triarea(x, node2, node1)\
+                                part2 = triarea(x, node2, y)\
+                                totalquad = part1 + part2\
+                            elif edgeweight(y,node1) > 0:\
+                                part1 = triarea(y, node2, node1)\
+                                part2 = triarea(x, y, node1)\
+                                totalquad = part1 + part2\
+                            else:\
+                            #Otherwise, the area of the quadrilateral is calculated using the quadarea function\
+                            #All areas and cycle nodes are added to the big final dictionary "areas"  \
+                                totalquad = quadarea(node1,node2, x, y)\
+                            cycle = [node1,node2, x, y]\
+                            areas[tuple(cycle)] = totalquad\
+\
+#This loop deals with pentagons\
+#It starts by taking the same combinatoion of x and y values from the edges that exist from nodes 1 and 2 that we saw in the previous loop\
+    for x in exed1:\
+                for y in exed2:\
+                    #It also cycles through each node in a loop. I call this random node "rand" and treat it as a possible 5th node of the cycle\
+                    #Each rand is compared with every x and y value to see if there is an edge between x and rand and an edge between y and rand\
+                    for rand in range(0,len(adj)):\
+                        if x != node1 and x != node2 and y != node1 and y != node2 and rand != x and rand != y and rand != y and rand != x and rand != node1 and rand != node2 and x != y:\
+                            if edgeweight(x,rand) > 0 and edgeweight(y,rand) > 0:\
+                               #all of these if statment take into account situations where smaller triangles and/or pentagons could be making up a pentagon\
+                                #in those cases, the weight of the triangles/quadrilaterals will be taken individually using the triarea and quadarea functions and added up\
+                                #The total area of the pentagon is stored in the variable "totalpent"\
+                                if edgeweight(x,y) > 0:\
+                                    if edgeweight(x,node2) > 0:\
+                                        totalpent = triarea(x,y, rand) + triarea(x,y, node2) + triarea(x, node1, node2)\
+                                    elif edgeweight(y,node1) > 0:\
+                                        totalpent = triarea(x,y, rand) + triarea(x,y, node1) + triarea(y, node1, node2)\
+                                    else:\
+                                        totalpent = triarea(x,y, rand) + quadarea(x, y, node1, node2)\
+                                elif edgeweight(node1,y) > 0:\
+                                    if edgeweight(rand,node1) > 0:\
+                                        totalpent = triarea(x,node1, rand) + triarea(rand,y, node1) + triarea(y, node1, node2)\
+                                    else:\
+                                        totalpent = triarea(node1, y, node2) + quadarea(x, y, node1, rand)\
+                                elif edgeweight(x,node2) > 0:\
+                                    if edgeweight(rand,node2) > 0:\
+                                        totalpent = triarea(x,node2, rand) + triarea(rand,y, node2) + triarea(x, node1, node2)\
+                                    else:\
+                                        totalpent = triarea(node1, x, node2) + quadarea(x, y, node2, rand)\
+                                elif edgeweight(rand,node1) > 0:\
+                                    totalpent = triarea(node1, x, rand) + quadarea(node1, y, node2, rand)\
+                                elif edgeweight(rand,node2) > 0:\
+                                    if edgeweight(node2, rand) > 0:\
+                                        totalpent = triarea(x,node1, rand) + triarea(rand,y, node2) + triarea(rand, node1, node2)\
+                                    else:\
+                                        totalpent = triarea(node1, x, node2) + quadarea(x, y, node2, rand)\
+                                #otherwise the area is found by averaging the weight of all of the edges\
+                                else:\
+                                    totalpent = (edgeweight(node1, node2) + edgeweight(node1,x)+ edgeweight(node2, y) + edgeweight(y,rand) + edgeweight(x, rand)) /5\
+                                cycle = [node1, node2, x, y, rand]\
+                                #the cycle nodes and areas are added to the final dictionary\
+                                areas[tuple(cycle)] = totalpent \
+    return areas\
+\
+#function to find the paralell edges that are contained within cycles\
+def parface(node1, node2):\
+    #ppe will be the final, returned dictionary which contains the two paralell nodes as the key and the weight of the face that they belong to as the key\
+    ppe = \{\}\
+    #the function begins by finding all of the cycles that contain the original edge\
+    #the faceWeights dictionary will call the above faceweight function and therefore contain the nodes of a cycle as a key and the weight of that cycle as a value\
+    faceWeights = faceweight(node1,node2)\
+    for nodes, weight in faceWeights.items():\
+        #since triangles cannot contain paralell edges, the loop first sees if each cycle contains four nodes and is therefore a quad\
+        #If it is, it adds the edge that does not contain any of the original nodes (and that is recorded as the 3rd and 4th nodes of each quad cycle in the faceweight function) to the final dictionary "ppe"\
+        if len(nodes) == 4:\
+            paralellEdges = []\
+            paralellEdges.append(nodes[2])\
+            paralellEdges.append(nodes[3])\
+            ppe[tuple(paralellEdges)] = weight\
+        #If it is a pentagon, the loop considers the edges made between x,rand and y,rand in the faceweight function\
+        #It makes a list with those two edge combinations and adds each to the final ppe dictionary \
+        elif len(nodes) == 5:\
+            paralellEdges = []\
+            paralellEdges2 = []\
+            paralellEdges.append(nodes[2])\
+            paralellEdges.append(nodes[4])\
+            paralellEdges2.append(nodes[3])\
+            paralellEdges2.append(nodes[4])\
+            ppe[tuple(paralellEdges)] = weight\
+            ppe[tuple(paralellEdges2)] = weight\
+    return ppe\
+\
+#This function gathers paralell nodes that are not contained in a cycle\
+def parnode(node1, node2):\
+    #fpe will be the final, returned dictionary. It will contain one node as the key and the other as the value\
+    fpe = \{\}\
+    #These next few lines are ensuring that we have a correctly-formatted list of all of the nodes that are used in a cycle\
+    #We get these nodes from the faceweight function and compile them into a list called "used"\
+    whole = faceweight(node1, node2)\
+    used = whole.keys()\
+    usedCorrectFormat = []\
+    for x in used:\
+        for y in x:\
+            usedCorrectFormat.append(y)\
+    #Take each node (I will call this random node "x") that is not part of a cycle (meaning its not in the "used" list) and see if it forms an edge with either of the original nodes\
+    #If it does, we add the new node x and the original node to the fpe dictionary\
+    for x in range(0,len(adj)):\
+        if (x not in usedCorrectFormat) and edgeweight(node1, x) > 0 and x !=node1 and x !=node2:\
+            fpe[x] = node1\
+        elif (x not in usedCorrectFormat) and edgeweight(node2, x) > 0 and x !=node1 and x !=node2:\
+            fpe[x] = node2\
+    return fpe\
+\
+#This function compiles a final value for FRC using the previously defined functions\
+def FRC(node1, node2):\
+#This if statement ensures that we wont be dividing 0/0    \
+    if edgeweight(node1,node2) == 0:\
+        final = 1\
+    else:\
+        #these parts will all be seperate summations\
+        part11 = 0\
+        part21 = 0\
+        part22 = 0\
+        faceweights = faceweight(node1,node2)\
+        #"x" represents the nodes in a cycle and "y" represents the weight of that cycle\
+        for x,y in faceweights.items():\
+            part11 = part11 + edgeweight(node1,node2) / y\
+        #part12 takes the second summation\
+        part12 = vertexweight(node1)/edgeweight(node1,node2) + vertexweight(node2)/edgeweight(node1,node2)\
+        part1 = part11 + part12\
+        #parfaces is a dictionary that has the paralell edge as they key and the weight of the cycle containing that edge as its value\
+        #it is used to calculate part21, which is a summation involving paralell edges contained in faces\
+        parfaces = parface(node1,node2)\
+        #in this case, "x" is the parallel and "y" is the cycle weight\
+        #The a and b represent each paralell node and are used so the list is in the correct format\
+        if len(parfaces) > 0:\
+            for x,y in parfaces.items():\
+                a = x[0]\
+                b = x[1]\
+                part21 = part21 + math.sqrt(edgeweight(node1,node2) * edgeweight(a,b)) / y\
+        #parnodes will be a dictionary that contains each paralell edge outside of a face with a single node as the key/value\
+        parnodes = parnode(node1,node2)\
+        #For this loop, x and y represent the nodes that make up a paralell edge outside of a face, with y being the node shared by both edges\
+        for x,y in parnodes.items():\
+            part22 = part22 + vertexweight(y) / math.sqrt(edgeweight(node1,node2) * edgeweight(x,y))\
+        final = edgeweight(node1,node2) * (part1 - (part21 - part22)) \
+    return final\
+\
+print(FRC(0,2))}
